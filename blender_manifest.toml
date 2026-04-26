@@ -1,0 +1,13 @@
+schema_version = "1.0.0"
+
+id = "uv_layers_tools_ult"
+name = "UV Layers Tools (ULT)"
+tagline = "Batch UV layer management for Blender"
+version = "1.1.0"
+type = "add-on"
+blender_version_min = "4.2.0"
+license = ["SPDX:GPL-3.0-or-later"]
+maintainer = "Karen (Threed)"
+website = "https://github.com/AbstracteurDeQuinteEssence/Blender-UV-Layers-Tools-ULT"
+
+tags = ["UV", "Mesh"]
