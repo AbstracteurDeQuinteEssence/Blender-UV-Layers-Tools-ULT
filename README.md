@@ -4,6 +4,8 @@
 
 **ULT** — a Blender add-on for batch UV layer management.
 
+*(Description is from an older version — update coming soon)*
+
 ## Features
 
 - Add, delete, rename UV layers on selected meshes.
