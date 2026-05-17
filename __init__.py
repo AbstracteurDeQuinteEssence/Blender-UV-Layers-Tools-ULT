@@ -5,12 +5,13 @@ import time
 import bpy
 from bpy.types import Operator, Panel, PropertyGroup, UIList, Menu
 from bpy.props import IntProperty, StringProperty, EnumProperty, BoolProperty, PointerProperty, CollectionProperty
+from bpy.app.handlers import persistent
 
 BUILTIN_UV_PRESETS = {
     "GraffPreset": ["UV_Tile", "UV_Nac", "UV_ColorAtlas"],
     "GameDevPreset": ["UV_Main", "UV_Lightmap", "UV_Decals"],
     "IndexPreset": ["UV0", "UV1", "UV2", "UV3", "UV4", "UV5", "UV6", "UV7"],
-    "   ": [
+    "OfficePreset": [
         "╭(ㆆ _ ㆆ)╮[ BO$$ ]",
         "Z z z ( - ‿ - )   _]",
         "(⌐■_■) _]  _____  [_ (・‿・)",
@@ -22,50 +23,125 @@ BUILTIN_UV_PRESETS = {
     ]
 }
 
+HIDDEN_PRESET_KEYS = {"OfficePreset"}
+
 EMOTICONS = {
-    8: "∞",
-    13: "(=👁  ｪ  👁=)",
-    27: "( ✖ ╭╮ ✖ )",
+    3: "❨ λ ❩",
+    7: "( = ^   ◡   ^ = )",
+    8: "( 8 ) ↺ (▽): 𝖸𝖤𝖲",
+    13: "(= 👁  ｪ  👁 =)",
+    18: "(  ɔ ˘ з˘ɔ) ( ≧  ◡ ≦)",
+    21: "[ 𝕁 ♣ ]  [ 𝔸 ♠ ]",
+    27: "( ×  ︵  × )",
     33: "╰(  † - †  )╯",
     42: "(  -  ‿ ･ิ )",
+    47: "(    –  _ -)┳═  ・",
+    54: "🅰🅱🅾🅱🅰",
     69: "(   o   ͜ʖ o )",
+    100: "( ╯°  𝕤ᴛO° )╯",
     228: "|  |(-_-)|  |",
+    255: "[ 𝟬𝘅𝗙𝗙 ]",
     300: "(   '   o ' )  c==3",
-    322: "$  «Solo»  $",
-    404: "[ Not Found ]",
+    322: "$  «𝐒𝐨𝐥𝐨»  $",
+    404: "[ 𝗡𝗢𝗧 𝗙𝗢𝗨𝗡𝗗 ]",
     665: "(   ◣    ﹏ ◢)",
     777: "(  $   ‿‿ $)",
     1487: "(  ಠ   _  ಠ)",
     1984: "(  ◎   _  ◎)",
-    2077: "[ B  U  G ]",
+    2077: "[ 𝗕  𝗨  𝗚 ]",
     80085: "( . Y . )",
+    999999: "(◎  ε  ◎  )",
 }
+
+def update_emoticons_lock(self, context):
+    if not self.show_mesh_count and not self.show_nonmesh_count:
+        self.show_emoticons = False
+
+def ult_auto_sync_render_update(self, context):
+    if self.auto_sync_render:
+        if not bpy.app.timers.is_registered(_ult_auto_sync_timer):
+            bpy.app.timers.register(_ult_auto_sync_timer, first_interval=0.1)
+        
+        objects_to_sync = list(context.selected_objects)
+        active_obj = context.active_object
+        if active_obj and active_obj.type == 'MESH' and active_obj not in objects_to_sync:
+            objects_to_sync.append(active_obj)
+        
+        for obj in objects_to_sync:
+            if obj.type == 'MESH':
+                uv_layers = obj.data.uv_layers
+                if uv_layers:
+                    active_idx = uv_layers.active_index
+                    if active_idx >= 0 and not uv_layers[active_idx].active_render:
+                        for uv in uv_layers:
+                            uv.active_render = False
+                        uv_layers[active_idx].active_render = True
+                        obj.data.update_tag()
+    else:
+        if bpy.app.timers.is_registered(_ult_auto_sync_timer):
+            bpy.app.timers.unregister(_ult_auto_sync_timer)
 
 class UVLayersSettings(PropertyGroup):
     auto_sync_render: BoolProperty(
         name="Sync Render with Active UV",
         description="When enabled, the active UV layer is automatically used as the render UV layer for any mesh objects you select",
+        default=False,
+        update=ult_auto_sync_render_update
+    )
+    statistics: BoolProperty(
+        name="Statistics",
+        description="Show statistics for selected objects and their UV layers, configured via the popover",
         default=False
     )
-    info_display: BoolProperty(
-        name="Info Display",
-        description="When enabled, the following information about selected objects is displayed: mesh/non‑mesh counts, meshes without UV layers, meshes with zero UV area, mismatches in UV layer counts/names. And for special numbers in the mesh/non‑mesh counters, crazy emoticons will appear (・｀ω´・) – try to find them all!",
+    show_emoticons: BoolProperty(
+        name="Emoticons",
+        description="Show crazy emoticons that appear for special numbers in the mesh/non‑mesh counters  (・｀ω´・)  – TRY TO FIND 'EM ALL!",
+        default=True
+    )
+    show_mesh_count: BoolProperty(
+        name="Mesh Count",
+        description="Show the number of selected mesh objects",
+        default=True,
+        update=update_emoticons_lock
+    )
+    show_nonmesh_count: BoolProperty(
+        name="Non‑Mesh Count",
+        description="Show the number of selected non‑mesh objects",
+        default=True,
+        update=update_emoticons_lock
+    )
+    show_meshes_without_uv: BoolProperty(
+        name="Meshes without UV",
+        description="Show the number of selected meshes that have no UV layers",
+        default=True
+    )
+    show_uv_counts_mismatch: BoolProperty(
+        name="UV Count Mismatch",
+        description="Warn when selected meshes have different numbers of UV layers",
+        default=True
+    )
+    show_uv_names_mismatch: BoolProperty(
+        name="UV Names Mismatch",
+        description="Warn when selected meshes have different UV layer names at the same index",
+        default=True
+    )
+    show_uv_layers_match: BoolProperty(
+        name="UV Layers Match",
+        description="Show a confirmation if all selected meshes have matching UV layers.",
+        default=True
+    )
+    show_hidden_presets: BoolProperty(
+        name="Hidden Presets",
+        description="Show hidden UV name presets in the preset dropdown",
         default=False
     )
-    stats_meshes_count: IntProperty(default=0)
-    stats_non_meshes_count: IntProperty(default=0)
-    stats_meshes_without_uv: IntProperty(default=0)
-    stats_meshes_zero_uv: IntProperty(default=0)
-    stats_uv_counts_mismatch: BoolProperty(default=False)
-    stats_uv_names_mismatch: BoolProperty(default=False)
 
     def get_preset_items(self, context):
-        items = [
-            ('GraffPreset', 'GraffPreset', 'Built-in preset: GraffPreset'),
-            ('GameDevPreset', 'GameDevPreset', 'Built-in preset: GameDevPreset'),
-            ('IndexPreset', 'IndexPreset', 'Built-in preset: IndexPreset'),
-            ('   ', '   ', 'Built-in preset: HiddenPreset')
-        ]
+        items = []
+        for key in BUILTIN_UV_PRESETS:
+            if key in HIDDEN_PRESET_KEYS and not self.show_hidden_presets:
+                continue
+            items.append((key, key, f'Built-in preset: {key}'))
         for preset in context.scene.uv_presets:
             items.append((preset.name, preset.name, f"Custom preset: {preset.name}"))
         return items
@@ -128,116 +204,28 @@ class UV_OT_Base:
         if context.scene:
             context.scene.update_tag()
 
-def has_zero_uv_area(obj):
-    if obj.type != 'MESH':
-        return False
-    uv_layers = obj.data.uv_layers
-    if not uv_layers:
-        return False
-    epsilon = 1e-6
-    for uv_layer in uv_layers:
-        uv_data = uv_layer.data
-        if not uv_data:
-            continue
-        u_min = v_min = float('inf')
-        u_max = v_max = -float('inf')
-        for loop in obj.data.loops:
-            uv = uv_data[loop.index].uv
-            u_min = min(u_min, uv[0])
-            u_max = max(u_max, uv[0])
-            v_min = min(v_min, uv[1])
-            v_max = max(v_max, uv[1])
-        if (u_max - u_min) < epsilon and (v_max - v_min) < epsilon:
-            return True
-    return False
-
-def has_any_zero_island(obj):
-    if obj.type != 'MESH':
-        return False
-    uv_layers = obj.data.uv_layers
-    if not uv_layers:
-        return False
-    epsilon = 1e-6
-    for uv_layer in uv_layers:
-        uv_data = uv_layer.data
-        if not uv_data:
-            continue
-        for poly in obj.data.polygons:
-            u_min = v_min = float('inf')
-            u_max = v_max = -float('inf')
-            for loop_index in poly.loop_indices:
-                uv = uv_data[loop_index].uv
-                u_min = min(u_min, uv[0])
-                u_max = max(u_max, uv[0])
-                v_min = min(v_min, uv[1])
-                v_max = max(v_max, uv[1])
-            if (u_max - u_min) < epsilon and (v_max - v_min) < epsilon:
-                return True
-    return False
-
-def update_uv_stats(scene, depsgraph=None):
-    context = bpy.context
-    settings = scene.uv_layers_tools
-    selected = context.selected_objects
-    meshes = [obj for obj in selected if obj.type == 'MESH']
-    non_meshes = [obj for obj in selected if obj.type != 'MESH']
-    settings.stats_meshes_count = len(meshes)
-    settings.stats_non_meshes_count = len(non_meshes)
-    if not settings.info_display:
-        return
-    meshes_without_uv = 0
-    meshes_zero_uv = 0
-    for obj in meshes:
-        uv_count = len(obj.data.uv_layers)
-        if uv_count == 0:
-            meshes_without_uv += 1
-        elif has_zero_uv_area(obj):
-            meshes_zero_uv += 1
-    settings.stats_meshes_without_uv = meshes_without_uv
-    settings.stats_meshes_zero_uv = meshes_zero_uv
-    if meshes:
-        uv_counts = {len(obj.data.uv_layers) for obj in meshes}
-        settings.stats_uv_counts_mismatch = len(uv_counts) > 1
-        max_layers = max(uv_counts) if uv_counts else 0
-        name_mismatch = False
-        for i in range(max_layers):
-            names = set()
-            for obj in meshes:
-                if i < len(obj.data.uv_layers):
-                    names.add(obj.data.uv_layers[i].name)
-            if len(names) > 1:
-                name_mismatch = True
-                break
-        settings.stats_uv_names_mismatch = name_mismatch
-    else:
-        settings.stats_uv_counts_mismatch = False
-        settings.stats_uv_names_mismatch = False
-
-@bpy.app.handlers.persistent
-def update_auto_render_and_stats(dummy):
+def _ult_auto_sync_timer():
     scene = bpy.context.scene
     if not scene or not hasattr(scene, 'uv_layers_tools'):
-        return
+        return 0.1
     settings = scene.uv_layers_tools
-    if settings.info_display:
-        update_uv_stats(scene)
-    if not settings.auto_sync_render:
-        return
-    selected_objects = list(bpy.context.selected_objects)
-    active_object = bpy.context.active_object
-    objects_to_process = selected_objects
-    if (active_object and active_object.type == 'MESH' and active_object not in selected_objects):
-        objects_to_process.append(active_object)
-    for obj in objects_to_process:
-        if obj.type == 'MESH':
-            uv_layers = obj.data.uv_layers
-            if uv_layers:
-                active_idx = uv_layers.active_index
-                if active_idx >= 0 and not uv_layers[active_idx].active_render:
-                    for uv in uv_layers:
-                        uv.active_render = False
-                    uv_layers[active_idx].active_render = True
-                    obj.data.update_tag()
+    if settings.auto_sync_render:
+        objects_to_sync = list(bpy.context.selected_objects)
+        active_obj = bpy.context.active_object
+        if active_obj and active_obj.type == 'MESH' and active_obj not in objects_to_sync:
+            objects_to_sync.append(active_obj)
+        
+        for obj in objects_to_sync:
+            if obj.type == 'MESH':
+                uv_layers = obj.data.uv_layers
+                if uv_layers:
+                    active_idx = uv_layers.active_index
+                    if active_idx >= 0 and not uv_layers[active_idx].active_render:
+                        for uv in uv_layers:
+                            uv.active_render = False
+                        uv_layers[active_idx].active_render = True
+                        obj.data.update_tag()
+    return 0.1
 
 class MESH_OT_ult_select_without_uv(Operator):
     bl_idname = "mesh.ult_select_without_uv"
@@ -258,53 +246,8 @@ class MESH_OT_ult_select_without_uv(Operator):
                 if obj.type == 'MESH' and obj.select_get():
                     context.view_layer.objects.active = obj
                     break
-        self.report({'INFO'}, f"Selected {selected} meshes without UV")
+        self.report({'INFO'}, f"Selected {selected} mesh(es) without UV")
         return {'FINISHED'}
-
-class MESH_OT_ult_select_zero_uv_area(Operator):
-    bl_idname = "mesh.ult_select_zero_uv_area"
-    bl_label = "Meshes with Zero UV Area"
-    bl_description = "Select mesh objects based on collapsed UV islands"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    selection_mode: EnumProperty(
-        items=[
-            ('ALL_ISLANDS', 'All Islands', 'Select meshes where at least one UV layer has all UV islands collapsed to zero area'),
-            ('ANY_ISLAND', 'Any Island', 'Select meshes where any UV island is collapsed to zero area in any UV layer')
-        ],
-        name="Mode",
-        default='ALL_ISLANDS'
-    )
-
-    def execute(self, context):
-        bpy.ops.object.select_all(action='DESELECT')
-        selected = 0
-        check_func = has_zero_uv_area if self.selection_mode == 'ALL_ISLANDS' else has_any_zero_island
-        for obj in bpy.data.objects:
-            if obj.type == 'MESH' and not obj.hide_get():
-                if check_func(obj):
-                    obj.select_set(True)
-                    selected += 1
-        if selected > 0:
-            for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.select_get():
-                    context.view_layer.objects.active = obj
-                    break
-        self.report({'INFO'}, f"Selected {selected} meshes")
-        return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=300)
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(self, "selection_mode", text="Mode")
-        if self.selection_mode == 'ANY_ISLAND':
-            box = layout.box()
-            box.label(text="This mode checks each polygon individually", icon='ERROR')
-            box.label(text="across all UV layers of visible meshes", icon='BLANK1')
-            box.label(text="and may be noticeably slow on meshes", icon='BLANK1')
-            box.label(text="with heavy geometry.", icon='BLANK1')
 
 class MESH_OT_ult_add_uv(Operator):
     bl_idname = "mesh.ult_add_uv"
@@ -394,6 +337,7 @@ class MESH_OT_ult_set_active_uv(Operator, UV_OT_Base):
     def execute(self, context):
         idx = self.index - 1
         settings = context.scene.uv_layers_tools
+        affected = 0
         for obj in context.selected_objects:
             if obj.type == 'MESH' and idx < len(obj.data.uv_layers):
                 obj.data.uv_layers.active_index = idx
@@ -401,7 +345,9 @@ class MESH_OT_ult_set_active_uv(Operator, UV_OT_Base):
                     for uv in obj.data.uv_layers:
                         uv.active_render = False
                     obj.data.uv_layers[idx].active_render = True
+                affected += 1
         self.update_ui(context)
+        self.report({'INFO'}, f"Set active UV layer for {affected} object(s)")
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -435,11 +381,13 @@ class MESH_OT_ult_set_render_uv(Operator):
 
     def execute(self, context):
         idx = self.index - 1
+        affected = 0
         for obj in context.selected_objects:
             if obj.type == 'MESH' and idx < len(obj.data.uv_layers):
                 for uv in obj.data.uv_layers:
                     uv.active_render = False
                 obj.data.uv_layers[idx].active_render = True
+                affected += 1
         for obj in context.selected_objects:
             if obj.type == 'MESH':
                 obj.data.update_tag()
@@ -450,6 +398,7 @@ class MESH_OT_ult_set_render_uv(Operator):
                     area.tag_redraw()
         if context.scene:
             context.scene.update_tag()
+        self.report({'INFO'}, f"Set render UV layer for {affected} object(s)")
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -739,7 +688,7 @@ class MESH_OT_ult_sync_active_uv(Operator):
                             uv.active_render = False
                         obj.data.uv_layers[active_idx].active_render = True
                     synced += 1
-        self.report({'INFO'}, f"Synced active UV for {synced} objects")
+        self.report({'INFO'}, f"Synced active UV layer for {synced} object(s)")
         return {'FINISHED'}
 
 class MESH_OT_ult_sync_render_uv(Operator):
@@ -776,7 +725,7 @@ class MESH_OT_ult_sync_render_uv(Operator):
                         uv.active_render = False
                     obj.data.uv_layers[render_idx].active_render = True
                     synced += 1
-        self.report({'INFO'}, f"Synced render UV for {synced} objects")
+        self.report({'INFO'}, f"Synced render UV layer for {synced} object(s)")
         return {'FINISHED'}
 
 class MESH_OT_ult_apply_preset(Operator, UV_OT_Base):
@@ -811,7 +760,8 @@ class MESH_OT_ult_apply_preset(Operator, UV_OT_Base):
                     if i < len(uv_names):
                         uv_layer.name = uv_names[i]
                         renamed_count += 1
-        self.report({'INFO'}, f"Applied '{preset_name}' to {mesh_count} objects, renamed {renamed_count} UV layers")
+        self.update_ui(context)
+        self.report({'INFO'}, f"Applied '{preset_name}' to {mesh_count} object(s), renamed {renamed_count} UV layer(s)")
         return {'FINISHED'}
 
 class OBJECT_OT_ult_manage_presets(Operator):
@@ -827,14 +777,17 @@ class OBJECT_OT_ult_manage_presets(Operator):
 
     def draw(self, context):
         layout = self.layout
+        settings = context.scene.uv_layers_tools
         layout.label(text="Built-in Presets:", icon='LOCKED')
         for preset_name in BUILTIN_UV_PRESETS:
+            if preset_name in HIDDEN_PRESET_KEYS and not settings.show_hidden_presets:
+                continue
             row = layout.row()
             row.label(text=preset_name, icon='PRESET')
         layout.separator()
         layout.label(text="Custom Presets:", icon='MODIFIER')
         if not context.scene.uv_presets:
-            layout.label(text="        No custom presets yet ( ￢  _￢)", icon='NONE')
+            layout.label(text="         . . .", icon='NONE')
         else:
             for preset in context.scene.uv_presets:
                 row = layout.row()
@@ -845,8 +798,10 @@ class OBJECT_OT_ult_manage_presets(Operator):
                 delete_op.preset_name = preset.name
         layout.separator()
         row = layout.row()
-        op = row.operator("object.ult_create_preset", text="New", icon='ADD')
+        op = row.operator("object.ult_create_preset", text="Create Preset", icon='ADD')
         op.context = 'INVOKE_DEFAULT'
+        layout.separator()
+        layout.prop(settings, "show_hidden_presets", text="   Hidden Presets")
         layout.separator()
         layout.label(text="Note: OK and Cancel buttons both close this dialog", icon='INFO')
 
@@ -877,7 +832,7 @@ class OBJECT_OT_ult_create_preset(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     context: StringProperty(default='INVOKE_DEFAULT')
-    preset_name: StringProperty(name="Preset Name", default="", description="Name of the UV name preset (empty for default)")
+    preset_name: StringProperty(name="Preset Name", default="", description="Name of the UV name preset")
     uv_name_1: StringProperty(name="UV 1", default="")
     uv_name_2: StringProperty(name="UV 2", default="")
     uv_name_3: StringProperty(name="UV 3", default="")
@@ -945,7 +900,7 @@ class OBJECT_OT_ult_create_preset(Operator):
 class OBJECT_OT_ult_edit_preset(Operator):
     bl_idname = "object.ult_edit_preset"
     bl_label = "Edit UV Name Preset"
-    bl_description = "Edit an existing UV name preset"
+    bl_description = "Edit a custom UV name preset"
     bl_options = {'REGISTER', 'UNDO'}
 
     context: StringProperty(default='INVOKE_DEFAULT')
@@ -1029,7 +984,7 @@ class OBJECT_OT_ult_edit_preset(Operator):
 class OBJECT_OT_ult_delete_preset(Operator):
     bl_idname = "object.ult_delete_preset"
     bl_label = "Delete Preset"
-    bl_description = "Deletes a custom UV name preset"
+    bl_description = "Delete a custom UV name preset"
     bl_options = {'REGISTER', 'UNDO'}
 
     preset_name: StringProperty(name="Preset Name")
@@ -1048,6 +1003,26 @@ class OBJECT_OT_ult_delete_preset(Operator):
                 return {'FINISHED'}
         return {'CANCELLED'}
 
+class VIEW3D_PT_ult_statistics_popover(Panel):
+    bl_label = "Statistics"
+    bl_idname = "VIEW3D_PT_ult_statistics_popover"
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'WINDOW'
+    bl_category = ""
+    bl_options = {'HIDE_HEADER', 'INSTANCED'}
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.scene.uv_layers_tools
+        layout.prop(settings, "show_emoticons", text="Emoticons")
+        layout.prop(settings, "show_mesh_count", text="Mesh Count")
+        layout.prop(settings, "show_nonmesh_count", text="Non‑Mesh Count")
+        layout.prop(settings, "show_meshes_without_uv", text="Meshes without UV")
+        layout.prop(settings, "show_uv_counts_mismatch", text="UV Count Mismatch")
+        layout.prop(settings, "show_uv_names_mismatch", text="UV Names Mismatch")
+        layout.prop(settings, "show_uv_layers_match", text="UV Layers Match")
+
+
 class VIEW3D_MT_ult_selection_tools(Menu):
     bl_label = "Selection Tools"
     bl_idname = "VIEW3D_MT_ult_selection_tools"
@@ -1055,7 +1030,6 @@ class VIEW3D_MT_ult_selection_tools(Menu):
     def draw(self, context):
         layout = self.layout
         layout.operator("mesh.ult_select_without_uv", text="Meshes without UV", icon='X')
-        layout.operator("mesh.ult_select_zero_uv_area", text="Meshes with Zero UV Area", icon='SNAP_FACE_CENTER')
 
 class VIEW3D_PT_uv_layers_tools(Panel):
     bl_label = "UV Layers Tools"
@@ -1068,87 +1042,100 @@ class VIEW3D_PT_uv_layers_tools(Panel):
         layout = self.layout
         settings = context.scene.uv_layers_tools
 
-        row = layout.row(align=True)
-        row.scale_x = 2.0
-        row.prop(settings, "info_display", text="Info Display", toggle=True,
-                 icon='CHECKBOX_HLT' if settings.info_display else 'CHECKBOX_DEHLT')
-
         box = layout.box()
+        row = box.row(align=True)
+        row.scale_x = 2.0
+        row.prop(settings, "statistics", text="Statistics", toggle=True,
+                 icon='CHECKBOX_HLT' if settings.statistics else 'CHECKBOX_DEHLT')
+        row.popover(panel="VIEW3D_PT_ult_statistics_popover", text="", icon='PREFERENCES')
+
         all_objects = context.selected_objects
 
-        if all_objects and settings.info_display:
-            if settings.stats_meshes_count > 0:
+        if all_objects and settings.statistics:
+            meshes = [o for o in context.selected_objects if o.type == 'MESH']
+            non_meshes = [o for o in context.selected_objects if o.type != 'MESH']
+            meshes_count = len(meshes)
+            non_meshes_count = len(non_meshes)
+            meshes_without_uv = sum(1 for m in meshes if len(m.data.uv_layers) == 0)
+
+            uv_counts_mismatch = False
+            uv_names_mismatch = False
+            if meshes:
+                uv_counts = {len(m.data.uv_layers) for m in meshes}
+                uv_counts_mismatch = len(uv_counts) > 1
+                max_layers = max(uv_counts) if uv_counts else 0
+                for i in range(max_layers):
+                    names = {m.data.uv_layers[i].name for m in meshes if i < len(m.data.uv_layers)}
+                    if len(names) > 1:
+                        uv_names_mismatch = True
+                        break
+
+            if settings.show_mesh_count and meshes_count > 0:
                 row = box.row()
                 left = row.row(align=True)
                 left.label(text="", icon='OUTLINER_OB_MESH')
-                meshes_count = settings.stats_meshes_count
-                emoticon = EMOTICONS.get(meshes_count, "")
-                meshes_text = f"Meshes: {emoticon}" if emoticon else "Meshes:"
+                emoticon = EMOTICONS.get(meshes_count, "") if settings.show_emoticons else ""
+                meshes_text = f" Meshes: {emoticon}" if emoticon else " Meshes:"
                 left.label(text=meshes_text)
                 right = row.row()
                 right.alignment = 'RIGHT'
                 right.label(text=f"{meshes_count}")
 
-            non_meshes_count = settings.stats_non_meshes_count
-            if non_meshes_count > 0:
+            if settings.show_nonmesh_count and non_meshes_count > 0:
                 row = box.row()
                 left = row.row(align=True)
                 left.label(text="", icon='OUTLINER_OB_EMPTY')
-                emoticon = EMOTICONS.get(non_meshes_count, "")
-                non_meshes_text = f"Non-Meshes: {emoticon}" if emoticon else "Non-Meshes:"
+                emoticon = EMOTICONS.get(non_meshes_count, "") if settings.show_emoticons else ""
+                non_meshes_text = f" Non-Meshes: {emoticon}" if emoticon else " Non-Meshes:"
                 left.label(text=non_meshes_text)
                 right = row.row()
                 right.alignment = 'RIGHT'
                 right.label(text=f"{non_meshes_count}")
 
-            if settings.stats_meshes_count > 0:
-                if settings.stats_meshes_without_uv > 0:
+            if meshes_count > 0:
+                if settings.show_meshes_without_uv and meshes_without_uv > 0:
                     row = box.row()
                     left = row.row(align=True)
                     left.label(text="", icon='ERROR')
-                    left.label(text="Meshes without UV:")
+                    left.label(text=" Meshes without UV:")
                     right = row.row(align=True)
                     right.alignment = 'RIGHT'
-                    right.label(text=str(settings.stats_meshes_without_uv))
-                if settings.stats_meshes_zero_uv > 0:
+                    right.label(text=str(meshes_without_uv))
+                if settings.show_uv_counts_mismatch and uv_counts_mismatch:
                     row = box.row()
                     left = row.row(align=True)
                     left.label(text="", icon='ERROR')
-                    left.label(text="Meshes with Zero UV Area:")
-                    right = row.row(align=True)
+                    left.label(text=" UV Count Mismatch")
+                    right = row.row()
                     right.alignment = 'RIGHT'
-                    right.label(text=str(settings.stats_meshes_zero_uv))
-                if settings.stats_uv_counts_mismatch:
+                    right.label(text="")
+                if settings.show_uv_names_mismatch and uv_names_mismatch:
                     row = box.row()
                     left = row.row(align=True)
                     left.label(text="", icon='ERROR')
-                    left.label(text="UV Count Mismatch")
+                    left.label(text=" UV Names Mismatch")
                     right = row.row()
                     right.alignment = 'RIGHT'
                     right.label(text="")
-                if settings.stats_uv_names_mismatch:
+                if settings.show_uv_layers_match and meshes_count > 1 and not (
+                    uv_counts_mismatch or
+                    uv_names_mismatch or
+                    meshes_without_uv > 0
+                ):
                     row = box.row()
                     left = row.row(align=True)
-                    left.label(text="", icon='ERROR')
-                    left.label(text="UV Names Mismatch")
+                    left.label(text="", icon='RESTRICT_INSTANCED_OFF')
+                    left.label(text=" UV Layers Match")
                     right = row.row()
                     right.alignment = 'RIGHT'
                     right.label(text="")
-                if settings.stats_meshes_count > 1 and not (settings.stats_uv_counts_mismatch or settings.stats_uv_names_mismatch or settings.stats_meshes_without_uv > 0 or settings.stats_meshes_zero_uv > 0):
-                    row = box.row()
-                    left = row.row(align=True)
-                    left.label(text="", icon='UV_SYNC_SELECT')
-                    left.label(text="UV Layers Match")
-                    right = row.row()
-                    right.alignment = 'RIGHT'
-                    right.label(text="")
-        elif all_objects and not settings.info_display:
+        elif all_objects and not settings.statistics:
             pass
-        elif not all_objects and settings.info_display:
+        elif not all_objects and settings.statistics:
             row = box.row()
             left = row.row(align=True)
             left.label(text="", icon='INFO')
-            left.label(text="No Objects Selected   (  ⚆   _  ⚆)")
+            left.label(text=" No Objects Selected   (・ _  ・ )")
             right = row.row()
             right.alignment = 'RIGHT'
             right.label(text="")
@@ -1177,9 +1164,7 @@ class VIEW3D_PT_uv_layers_tools(Panel):
         col.separator(factor=0.8)
         row = col.row(align=True)
         row.operator("mesh.ult_delete_uv", text="Delete UV", icon='TRASH')
-        col.separator(factor=0.0)
-        row = col.row(align=True)
-        row.operator("mesh.ult_delete_uv_advanced", text="Advanced Delete UV(s)", icon='SETTINGS')
+        row.operator("mesh.ult_delete_uv_advanced", text="Advanced...", icon='SETTINGS')
 
         layout.separator(factor=0.5)
 
@@ -1235,8 +1220,6 @@ class VIEW3D_PT_uv_layers_tools(Panel):
         layout.separator(factor=0.5)
 
         box = layout.box()
-        col = box.column(align=True)
-        col.label(text="UV Layers of Active Mesh", icon='GROUP_UVS')
         row = box.row()
         split = row.split(factor=0.92)
         col_left = split.column()
@@ -1268,7 +1251,6 @@ classes = (
     UvPresetItem,
     MESH_UL_ult_uv_list,
     MESH_OT_ult_select_without_uv,
-    MESH_OT_ult_select_zero_uv_area,
     MESH_OT_ult_add_uv,
     MESH_OT_ult_rename_uv,
     MESH_OT_ult_set_active_uv,
@@ -1284,23 +1266,52 @@ classes = (
     OBJECT_OT_ult_create_preset,
     OBJECT_OT_ult_edit_preset,
     OBJECT_OT_ult_delete_preset,
+    VIEW3D_PT_ult_statistics_popover,
     VIEW3D_MT_ult_selection_tools,
     VIEW3D_PT_uv_layers_tools,
 )
+
+@persistent
+def _on_load_post(_):
+    if not bpy.app.timers.is_registered(_try_start_sync_timer):
+        bpy.app.timers.register(_try_start_sync_timer, first_interval=0.2)
+
+def _try_start_sync_timer():
+    scene = bpy.context.scene
+    if scene is None:
+        return 0.3
+    if not hasattr(scene, 'uv_layers_tools'):
+        return 0.3
+    settings = scene.uv_layers_tools
+    if getattr(settings, 'auto_sync_render', False):
+        if not bpy.app.timers.is_registered(_ult_auto_sync_timer):
+            bpy.app.timers.register(_ult_auto_sync_timer, first_interval=0.1)
+    return None
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.uv_layers_tools = PointerProperty(type=UVLayersSettings)
     bpy.types.Scene.uv_presets = CollectionProperty(type=UvPresetItem)
-    if update_auto_render_and_stats not in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.append(update_auto_render_and_stats)
+
+    if _on_load_post not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_on_load_post)
+
+    if not bpy.app.timers.is_registered(_try_start_sync_timer):
+        bpy.app.timers.register(_try_start_sync_timer, first_interval=0.2)
 
 def unregister():
-    if update_auto_render_and_stats in bpy.app.handlers.depsgraph_update_post:
-        bpy.app.handlers.depsgraph_update_post.remove(update_auto_render_and_stats)
-    del bpy.types.Scene.uv_presets
-    del bpy.types.Scene.uv_layers_tools
+    for timer in (_ult_auto_sync_timer, _try_start_sync_timer):
+        if bpy.app.timers.is_registered(timer):
+            bpy.app.timers.unregister(timer)
+    if _on_load_post in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_on_load_post)
+
+    if hasattr(bpy.types.Scene, 'uv_presets'):
+        del bpy.types.Scene.uv_presets
+    if hasattr(bpy.types.Scene, 'uv_layers_tools'):
+        del bpy.types.Scene.uv_layers_tools
+
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
