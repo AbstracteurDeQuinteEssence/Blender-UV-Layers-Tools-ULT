@@ -4,37 +4,27 @@
 
 **ULT** — a Blender add-on for batch UV layer management.
 
-*(Description is from an older version — update coming soon)*
-
 ## Features
 
-- Add, delete, rename UV layers on selected meshes.
-- Move UV layers up/down on selected meshes (preserving UV data).
-- Info panel: displays the number of selected meshes and non‑meshes, meshes without UV layers, and shows whether UV layer counts and names match or mismatch across selected objects. For certain selection counts, the panel displays various emoticons (¬‿¬)
-- Select all meshes in the scene and deselect non‑meshes.
-- Set active/render UV layer by index.
+- Add, rename and delete UV layers for all selected meshes.
+- Move UV layers up and down for all selected meshes.
+- Name UV layers using presets (built‑in or custom) for all selected meshes.
+- Statistics: displays the number of selected meshes, non‑meshes, meshes without UV data. Shows whether UV layer counts and names match or mismatch across selected objects. For certain selection counts, the panel displays various emoticons (・｀ω´・)
+- Set active/render UV layer by index for all selected meshes.
 - Sync active/render UV layer between meshes.
-- Automatically sync render UV layer with active UV layer on selected meshes.
-- Name UV layers using presets (built‑in and custom).
-- Active mesh UV layers block with +/– buttons (similar to the native UV Maps panel).
+- Sync Render with Active UV (checkbox): when enabled, the active UV layer is automatically used as the render UV layer for any mesh objects you select.
+- View and manage UV layers of the active mesh using the familiar panel – right in the add-on.
 
 ## Compatibility
 
-The add-on has been tested and works correctly in Blender 3.6, 4.5, and 5.1.
+The add-on has been tested and works correctly in Blender 4.5.
 
 ## Installation
 
-1. Download the `UV_Layers_Tools_ULT.py` file from [Releases](https://github.com/AbstracteurDeQuinteEssence/Blender-UV-Layers-Tools-ULT/releases).
+1. Download the latest `UV_Layers_Tools_ULT.zip` file from [Releases](https://github.com/AbstracteurDeQuinteEssence/Blender-UV-Layers-Tools-ULT/releases).
 2. In Blender: **Edit → Preferences → Add-ons → Install…**
 3. Select the downloaded file and install the add-on.
 4. The add-on panel is located in the 3D Viewport → Sidebar (`N`) → **ULT** tab.
-
-## Usage
-
-- Select one or more meshes.
-- Use the info panel to get a summary of the selected objects.
-- Use the buttons in the add-on panel for batch operations with UV layers.
-- Apply built‑in name presets or create your own.
 
 ## License
 
@@ -46,4 +36,4 @@ GNU General Public License v3.0. See [LICENSE](LICENSE).
 
 ## Notes
 
-This add-on was developed with the help of DeepSeek.
+This add-on was developed with the help of AI assistant.
